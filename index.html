@@ -1,4 +1,586 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#fff9f0"><title>치이카와 아카이브</title><style>:root{font-family:system-ui,-apple-system,sans-serif;color:#29313b;background:#fff9f0}*{box-sizing:border-box}body{margin:0}main{max-width:800px;margin:auto;padding:20px 14px 80px}header{display:flex;align-items:center;justify-content:space-between;gap:10px}h1{font-size:1.65rem;margin:14px 0 5px}.muted{color:#65717d;font-size:.89rem}.panel,.post{background:#fff;border:1px solid #eadfce;border-radius:16px;padding:15px;margin:12px 0;box-shadow:0 2px 8px #3d2c1210}.controls{display:flex;gap:8px;flex-wrap:wrap}input,select,button,a.action{font:inherit;border:1px solid #ddd1c1;background:#fff;border-radius:10px;padding:10px;color:inherit}button{cursor:pointer}button:focus-visible,a:focus-visible{outline:3px solid #6b93dc}.primary{background:#ffe7a8}a{color:#235ba0}.post-head{display:flex;justify-content:space-between;align-items:center;gap:8px}.star{font-size:1.4rem;min-width:48px}.post p{white-space:pre-wrap;overflow-wrap:anywhere}.post .media{width:100%;height:auto;border-radius:12px;margin-top:8px}.embed{min-height:50px}.empty{text-align:center;padding:28px;color:#687381}.hidden{display:none!important}#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#29313b;color:white;border-radius:10px;padding:12px;display:none;max-width:90vw}#top{position:fixed;bottom:15px;right:15px}</style></head><body><main><header><div><h1>🌼 치이카와 아카이브</h1><div class="muted">@ngnchiikawa · 오래된 게시글부터</div></div><a href="admin.html" class="action" style="font-size:.8rem">관리자 도구</a></header><section class="panel"><div class="controls"><input id="search" placeholder="본문 또는 게시글 번호 검색" aria-label="검색" style="flex:1;min-width:170px"><select id="filter" aria-label="게시글 필터"><option value="all">모든 게시글</option><option value="images">이미지 첨부</option><option value="imageOnly">본문 없는 이미지</option><option value="saved">내 책갈피</option></select><select id="order" aria-label="정렬"><option value="old">오래된 순</option><option value="new">최신 순</option></select><select id="year" aria-label="연도"><option value="">전체 연도</option></select></div><p class="muted" id="status">게시글을 불러오는 중…</p><div class="controls"><button id="resume">📍 읽던 위치로</button><button id="backup">☆ 책갈피 백업</button><label class="action" style="cursor:pointer">책갈피 복원 <input type="file" id="restore" accept="application/json" style="display:none"></label></div></section><div id="feed" aria-live="polite"></div><button id="more" class="primary hidden" style="width:100%">30개 더 보기</button></main><button id="top" aria-label="맨 위로">↑</button><div id="toast" role="status"></div><script src="https://platform.twitter.com/widgets.js" async charset="utf-8"></script><script>
-'use strict';const $=id=>document.getElementById(id),KEY='chiikawa_shared_v1';let posts=[],shown=30;let state={bookmarks:[],last:null};try{state={...state,...JSON.parse(localStorage.getItem(KEY)||'{}')}}catch{}const persist=()=>localStorage.setItem(KEY,JSON.stringify(state));const toast=t=>{const e=$('toast');e.textContent=t;e.style.display='block';setTimeout(()=>e.style.display='none',2700)};const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n};function filtered(){const q=$('search').value.toLowerCase(),f=$('filter').value,y=$('year').value;return posts.filter(p=>(!y||p.created_at.slice(0,4)===y)&&(!q||p.id.includes(q)||(p.text||'').toLowerCase().includes(q))&&(f!=='images'||p.images.length>0)&&(f!=='imageOnly'||p.images.length>0&&!(p.text||'').trim())&&(f!=='saved'||state.bookmarks.includes(p.id))).sort((a,b)=>$('order').value==='old'?a.created_at.localeCompare(b.created_at)||a.id.localeCompare(b.id):b.created_at.localeCompare(a.created_at)||b.id.localeCompare(a.id))}function draw(){const list=filtered();$('status').textContent=`공유 게시글 ${posts.length}개 · 검색 결과 ${list.length}개 · 표시 ${Math.min(shown,list.length)}개`;const feed=$('feed');feed.replaceChildren();if(!list.length)feed.append(el('div','empty','등록된 게시글이 없거나 검색 결과가 없어.'));for(const p of list.slice(0,shown)){const card=el('article','post');card.id='post-'+p.id;const head=el('div','post-head');const date=el('span','muted',new Date(p.created_at).toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul'}));const star=el('button','star',state.bookmarks.includes(p.id)?'★':'☆');star.setAttribute('aria-label','책갈피 토글');star.onclick=()=>{state.bookmarks=state.bookmarks.includes(p.id)?state.bookmarks.filter(x=>x!==p.id):[...state.bookmarks,p.id];persist();draw();toast('책갈피를 저장했어')};head.append(date,star);card.append(head);if(p.text)card.append(el('p','',p.text));if(p.images.length){for(const url of p.images){const a=el('a');a.href=url;a.target='_blank';a.rel='noopener noreferrer';const im=el('img','media');im.src=url;im.loading='lazy';im.alt='게시글 이미지';a.append(im);card.append(a)}}else{const b=el('blockquote','twitter-tweet');const a=el('a','', 'X 게시글 열기');a.href=p.url;b.append(a);card.append(b)}const a=el('a','','원본 게시글 보기 ↗');a.href=p.url;a.target='_blank';a.rel='noopener noreferrer';card.append(el('p'));
-card.lastElementChild.append(a);const mark=el('button','','여기까지 읽었어');mark.onclick=()=>{state.last=p.id;persist();toast('읽던 위치를 저장했어')};card.append(mark);feed.append(card)}$('more').classList.toggle('hidden',shown>=list.length);if(window.twttr?.widgets)window.twttr.widgets.load(feed)}for(const id of ['search','filter','order','year'])$(id).addEventListener('input',()=>{shown=30;draw()});$('more').onclick=()=>{shown+=30;draw()};$('top').onclick=()=>window.scrollTo({top:0,behavior:'smooth'});$('resume').onclick=()=>{if(!state.last)return toast('아직 저장된 읽던 위치가 없어');$('filter').value='all';$('search').value='';$('year').value='';let index=filtered().findIndex(p=>p.id===state.last);if(index<0)return toast('해당 게시글이 현재 목록에 없어');shown=Math.max(shown,index+1);draw();requestAnimationFrame(()=>$('post-'+state.last)?.scrollIntoView({behavior:'smooth'}))};$('backup').onclick=()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const u=URL.createObjectURL(blob);const a=el('a');a.href=u;a.download='chiikawa-bookmarks.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),500)};$('restore').onchange=async e=>{try{const v=JSON.parse(await e.target.files[0].text());if(!Array.isArray(v.bookmarks))throw Error();state.bookmarks=v.bookmarks.filter(x=>/^\d{10,22}$/.test(x));state.last=typeof v.last==='string'?v.last:null;persist();draw();toast('책갈피 복원 완료')}catch{toast('올바른 책갈피 JSON이 아니야')}};fetch('./data/posts.json?'+Date.now()).then(r=>{if(!r.ok)throw Error('HTTP '+r.status);return r.json()}).then(v=>{if(!Array.isArray(v))throw Error('JSON 배열 필요');posts=v.filter(p=>p&&/^\d{10,22}$/.test(String(p.id))&&typeof p.created_at==='string'&&/^https:\/\/x\.com\/ngnchiikawa\/status\/\d+$/.test(p.url)).map(p=>({...p,id:String(p.id),images:Array.isArray(p.images)?p.images.filter(x=>typeof x==='string'&&x.startsWith('https://')):[],text:String(p.text||'')}));for(const y of [...new Set(posts.map(p=>p.created_at.slice(0,4)))].sort()){const o=el('option','',y);o.value=y;$('year').append(o)}draw()}).catch(e=>$('status').textContent='데이터를 불러오지 못했어: '+e.message);
-</script></body></html>
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fff9f0">
+  <title>치이카와 아카이브</title>
+
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, sans-serif;
+      color: #29313b;
+      background: #fff9f0;
+    }
+
+    * { box-sizing: border-box; }
+
+    body { margin: 0; }
+
+    main {
+      max-width: 800px;
+      margin: auto;
+      padding: 20px 14px 80px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    h1 {
+      font-size: 1.65rem;
+      margin: 14px 0 5px;
+    }
+
+    .muted {
+      color: #65717d;
+      font-size: .89rem;
+    }
+
+    .panel, .post {
+      background: white;
+      border: 1px solid #eadfce;
+      border-radius: 16px;
+      padding: 15px;
+      margin: 12px 0;
+      box-shadow: 0 2px 8px #3d2c1210;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    input, select, button, a.action {
+      font: inherit;
+      border: 1px solid #ddd1c1;
+      background: white;
+      border-radius: 10px;
+      padding: 10px;
+      color: inherit;
+      max-width: 100%;
+    }
+
+    button { cursor: pointer; }
+
+    .primary { background: #ffe7a8; }
+
+    a { color: #235ba0; }
+
+    .post-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .star {
+      font-size: 1.4rem;
+      min-width: 48px;
+    }
+
+    .post p {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .post .media {
+      width: 100%;
+      height: auto;
+      border-radius: 12px;
+      margin-top: 8px;
+    }
+
+    .embed { min-height: 50px; }
+
+    .empty {
+      text-align: center;
+      padding: 28px;
+      color: #687381;
+    }
+
+    .hidden { display: none !important; }
+
+    #toast {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #29313b;
+      color: white;
+      border-radius: 10px;
+      padding: 12px;
+      display: none;
+      max-width: 90vw;
+      z-index: 10;
+    }
+
+    #top {
+      position: fixed;
+      bottom: 15px;
+      right: 15px;
+    }
+
+    @media (max-width: 480px) {
+      header { align-items: flex-start; }
+      h1 { font-size: 1.45rem; }
+      .controls input { min-width: 0; }
+    }
+  </style>
+</head>
+
+<body>
+<main>
+  <header>
+    <div>
+      <h1>🌼 치이카와 아카이브</h1>
+      <div class="muted">
+        @ngnchiikawa · 오래된 게시글부터
+      </div>
+    </div>
+    <a href="admin.html" class="action" style="font-size:.8rem">
+      관리자 도구
+    </a>
+  </header>
+
+  <section class="panel">
+    <div class="controls">
+      <input
+        id="search"
+        placeholder="본문 또는 게시글 번호 검색"
+        aria-label="검색"
+        style="flex:1;min-width:170px"
+      >
+
+      <select id="filter" aria-label="게시글 필터">
+        <option value="all">모든 게시글</option>
+        <option value="images">이미지 첨부</option>
+        <option value="imageOnly">본문 없는 이미지</option>
+        <option value="saved">내 책갈피</option>
+      </select>
+
+      <select id="order" aria-label="정렬">
+        <option value="old">오래된 순</option>
+        <option value="new">최신 순</option>
+      </select>
+
+      <select id="year" aria-label="연도">
+        <option value="">전체 연도</option>
+      </select>
+    </div>
+
+    <p class="muted" id="status">
+      게시글을 불러오는 중…
+    </p>
+
+    <div class="controls">
+      <button id="resume">📍 읽던 위치로</button>
+      <button id="backup">☆ 책갈피 백업</button>
+
+      <label class="action" style="cursor:pointer">
+        책갈피 복원
+        <input
+          type="file"
+          id="restore"
+          accept="application/json"
+          style="display:none"
+        >
+      </label>
+    </div>
+  </section>
+
+  <div id="feed" aria-live="polite"></div>
+
+  <button id="more" class="primary hidden" style="width:100%">
+    30개 더 보기
+  </button>
+</main>
+
+<button id="top" aria-label="맨 위로">↑</button>
+<div id="toast" role="status"></div>
+
+<script src="https://platform.twitter.com/widgets.js" async></script>
+
+<script>
+'use strict';
+
+const $ = id => document.getElementById(id);
+const KEY = 'chiikawa_shared_v1';
+
+let posts = [];
+let shown = 30;
+
+let state = {
+  bookmarks: [],
+  last: null
+};
+
+try {
+  const saved = JSON.parse(localStorage.getItem(KEY) || '{}');
+  state = { ...state, ...saved };
+
+  if (!Array.isArray(state.bookmarks)) {
+    state.bookmarks = [];
+  }
+} catch (error) {
+  console.warn('책갈피 불러오기 실패', error);
+}
+
+function persist() {
+  localStorage.setItem(KEY, JSON.stringify(state));
+}
+
+function toast(message) {
+  const element = $('toast');
+
+  element.textContent = message;
+  element.style.display = 'block';
+
+  setTimeout(() => {
+    element.style.display = 'none';
+  }, 2700);
+}
+
+function el(tag, className = '', text) {
+  const element = document.createElement(tag);
+
+  if (className) {
+    element.className = className;
+  }
+
+  if (text !== undefined) {
+    element.textContent = text;
+  }
+
+  return element;
+}
+
+function filtered() {
+  const query = $('search').value.toLowerCase();
+  const filter = $('filter').value;
+  const year = $('year').value;
+
+  return posts.filter(post => {
+    const matchesYear =
+      !year || post.created_at.slice(0, 4) === year;
+
+    const matchesSearch =
+      !query ||
+      post.id.includes(query) ||
+      post.text.toLowerCase().includes(query);
+
+    const hasImages = post.images.length > 0;
+
+    const matchesFilter =
+      filter === 'all' ||
+      (filter === 'images' && hasImages) ||
+      (
+        filter === 'imageOnly' &&
+        hasImages &&
+        !post.text.trim()
+      ) ||
+      (
+        filter === 'saved' &&
+        state.bookmarks.includes(post.id)
+      );
+
+    return matchesYear && matchesSearch && matchesFilter;
+  }).sort((a, b) => {
+    const comparison =
+      a.created_at.localeCompare(b.created_at) ||
+      a.id.localeCompare(b.id);
+
+    return $('order').value === 'old'
+      ? comparison
+      : -comparison;
+  });
+}
+
+function draw() {
+  const list = filtered();
+  const feed = $('feed');
+
+  $('status').textContent =
+    '공유 게시글 ' + posts.length + '개 · ' +
+    '검색 결과 ' + list.length + '개 · ' +
+    '표시 ' + Math.min(shown, list.length) + '개';
+
+  feed.replaceChildren();
+
+  if (!list.length) {
+    feed.append(
+      el('div', 'empty', '등록된 게시글이 없거나 검색 결과가 없어.')
+    );
+  }
+
+  for (const post of list.slice(0, shown)) {
+    const card = el('article', 'post');
+    card.id = 'post-' + post.id;
+
+    const head = el('div', 'post-head');
+
+    const date = el(
+      'span',
+      'muted',
+      new Date(post.created_at).toLocaleDateString(
+        'ko-KR',
+        { timeZone: 'Asia/Seoul' }
+      )
+    );
+
+    const star = el(
+      'button',
+      'star',
+      state.bookmarks.includes(post.id) ? '★' : '☆'
+    );
+
+    star.setAttribute('aria-label', '책갈피 토글');
+
+    star.onclick = () => {
+      if (state.bookmarks.includes(post.id)) {
+        state.bookmarks = state.bookmarks.filter(
+          id => id !== post.id
+        );
+      } else {
+        state.bookmarks.push(post.id);
+      }
+
+      persist();
+      draw();
+      toast('책갈피를 저장했어');
+    };
+
+    head.append(date, star);
+    card.append(head);
+
+    if (post.text) {
+      card.append(el('p', '', post.text));
+    }
+
+    if (post.images.length > 0) {
+      for (const imageUrl of post.images) {
+        const link = el('a');
+        link.href = imageUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+
+        const image = el('img', 'media');
+        image.src = imageUrl;
+        image.loading = 'lazy';
+        image.alt = '게시글 이미지';
+
+        link.append(image);
+        card.append(link);
+      }
+    } else {
+      const embed = el('blockquote', 'twitter-tweet');
+      const link = el('a', '', 'X 게시글 열기');
+
+      link.href = post.url;
+
+      embed.append(link);
+      card.append(embed);
+    }
+
+    const originalLink = el(
+      'a',
+      '',
+      '원본 게시글 보기 ↗'
+    );
+
+    originalLink.href = post.url;
+    originalLink.target = '_blank';
+    originalLink.rel = 'noopener noreferrer';
+
+    // 기존 오류 수정: append()의 반환값을 사용하지 않음
+    const linkParagraph = el('p');
+    linkParagraph.append(originalLink);
+    card.append(linkParagraph);
+
+    const mark = el('button', '', '여기까지 읽었어');
+
+    mark.onclick = () => {
+      state.last = post.id;
+      persist();
+      toast('읽던 위치를 저장했어');
+    };
+
+    card.append(mark);
+    feed.append(card);
+  }
+
+  $('more').classList.toggle(
+    'hidden',
+    shown >= list.length
+  );
+
+  if (window.twttr && window.twttr.widgets) {
+    window.twttr.widgets.load(feed);
+  }
+}
+
+for (const id of ['search', 'filter', 'order', 'year']) {
+  $(id).addEventListener('input', () => {
+    shown = 30;
+    draw();
+  });
+}
+
+$('more').onclick = () => {
+  shown += 30;
+  draw();
+};
+
+$('top').onclick = () => {
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  });
+};
+
+$('resume').onclick = () => {
+  if (!state.last) {
+    toast('아직 저장된 읽던 위치가 없어');
+    return;
+  }
+
+  $('filter').value = 'all';
+  $('search').value = '';
+  $('year').value = '';
+
+  const index = filtered().findIndex(
+    post => post.id === state.last
+  );
+
+  if (index < 0) {
+    toast('해당 게시글이 현재 목록에 없어');
+    return;
+  }
+
+  shown = Math.max(shown, index + 1);
+  draw();
+
+  requestAnimationFrame(() => {
+    $('post-' + state.last)?.scrollIntoView({
+      behavior: 'smooth'
+    });
+  });
+};
+
+$('backup').onclick = () => {
+  const blob = new Blob(
+    [JSON.stringify(state, null, 2)],
+    { type: 'application/json' }
+  );
+
+  const url = URL.createObjectURL(blob);
+  const link = el('a');
+
+  link.href = url;
+  link.download = 'chiikawa-bookmarks.json';
+  link.click();
+
+  setTimeout(() => URL.revokeObjectURL(url), 500);
+};
+
+$('restore').onchange = async event => {
+  try {
+    const file = event.target.files[0];
+
+    if (!file) return;
+
+    const data = JSON.parse(await file.text());
+
+    if (!Array.isArray(data.bookmarks)) {
+      throw new Error('잘못된 파일');
+    }
+
+    state.bookmarks = data.bookmarks.filter(
+      id => typeof id === 'string' && /^\d{10,22}$/.test(id)
+    );
+
+    state.last =
+      typeof data.last === 'string'
+        ? data.last
+        : null;
+
+    persist();
+    draw();
+    toast('책갈피 복원 완료');
+  } catch (error) {
+    toast('올바른 책갈피 JSON이 아니야');
+  }
+};
+
+async function loadPosts() {
+  try {
+    const response = await fetch(
+      './data/posts.json?' + Date.now()
+    );
+
+    if (!response.ok) {
+      throw new Error('HTTP ' + response.status);
+    }
+
+    const data = await response.json();
+
+    if (!Array.isArray(data)) {
+      throw new Error('JSON 배열이 필요해');
+    }
+
+    posts = data
+      .filter(post =>
+        post &&
+        /^\d{10,22}$/.test(String(post.id)) &&
+        typeof post.created_at === 'string' &&
+        /^https:\/\/x\.com\/ngnchiikawa\/status\/\d+$/.test(post.url)
+      )
+      .map(post => ({
+        ...post,
+        id: String(post.id),
+        text: String(post.text || ''),
+        images: Array.isArray(post.images)
+          ? post.images.filter(
+              url =>
+                typeof url === 'string' &&
+                url.startsWith('https://')
+            )
+          : []
+      }));
+
+    const years = [
+      ...new Set(
+        posts.map(post => post.created_at.slice(0, 4))
+      )
+    ].sort();
+
+    $('year').replaceChildren();
+
+    const allYears = el('option', '', '전체 연도');
+    allYears.value = '';
+    $('year').append(allYears);
+
+    for (const year of years) {
+      const option = el('option', '', year);
+      option.value = year;
+      $('year').append(option);
+    }
+
+    draw();
+  } catch (error) {
+    console.error(error);
+
+    $('status').textContent =
+      '데이터를 불러오지 못했어: ' + error.message;
+  }
+}
+
+loadPosts();
+</script>
+</body>
+</html>
+
